@@ -42,7 +42,16 @@ app.use(cors({
 }));
 
 // Handle preflight for ALL routes
-app.options('*', cors());
+app.options('*', cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin "${origin}" not allowed`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -103,12 +112,14 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🚀  Omira API  →  http://localhost:${PORT}`);
-  console.log(`❤️   Health     →  http://localhost:${PORT}/health`);
-  console.log(`🌐  CORS        →  ${ALLOWED_ORIGINS.join(', ')}`);
-  console.log(`📦  Env         →  ${process.env.NODE_ENV}\n`);
-  startScheduler();
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`\n🚀  Omira API  →  http://localhost:${PORT}`);
+    console.log(`❤️   Health     →  http://localhost:${PORT}/health`);
+    console.log(`🌐  CORS        →  ${ALLOWED_ORIGINS.join(', ')}`);
+    console.log(`📦  Env         →  ${process.env.NODE_ENV}\n`);
+    startScheduler();
+  });
+}
 
 export default app;
