@@ -1,13 +1,11 @@
 {
   "version": 2,
-  "installCommand": "npm install",
-  "buildCommand": "npm run build",
   "builds": [
     {
       "src": "src/app.ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["prisma/**"]
+        "includeFiles": ["prisma/**", "node_modules/.prisma/**", "node_modules/@prisma/client/**"]
       }
     }
   ],
