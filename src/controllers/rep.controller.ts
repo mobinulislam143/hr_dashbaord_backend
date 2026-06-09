@@ -3,6 +3,50 @@ import { prisma } from '../lib/prisma';
 import { sendSuccess, sendError } from '../utils/response';
 import { AuthRequest } from '../middleware/auth.middleware';
 
+export const createRep = async (req: AuthRequest, res: Response): Promise<void> => {
+  const orgId = req.user!.organizationId;
+  const { fullName, phone, email, city, state, business, role, recruitingSource, hireDate } = req.body;
+
+  if (!fullName || !business || !role) {
+    sendError(res, 'fullName, business, and role are required'); return;
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const applicant = await tx.applicant.create({
+      data: {
+        organizationId: orgId,
+        fullName,
+        phone: phone || '',
+        email: email || '',
+        city: city || '',
+        state: state || '',
+        business,
+        role,
+        recruitingSource: recruitingSource || 'OTHER',
+        status: 'ACTIVE_REP',
+        dateApplied: new Date(),
+      },
+    });
+
+    const rep = await tx.activeRep.create({
+      data: {
+        applicantId: applicant.id,
+        hireDate: hireDate ? new Date(hireDate) : new Date(),
+        isActive: true,
+      },
+      include: {
+        applicant: true,
+        scores: [],
+        performance: [],
+      } as any,
+    });
+
+    return rep;
+  });
+
+  sendSuccess(res, result, 'Rep added successfully');
+};
+
 const computeTier = (avg: number): 'A_PLAYER' | 'B_PLAYER' | 'C_PLAYER' => {
   if (avg >= 8) return 'A_PLAYER';
   if (avg >= 5) return 'B_PLAYER';

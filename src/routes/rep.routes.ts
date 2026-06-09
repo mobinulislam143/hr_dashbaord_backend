@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { getReps, getRep, scoreRep, addPerformance, removeRep, updateRepManager } from '../controllers/rep.controller';
+import { createRep, getReps, getRep, scoreRep, addPerformance, removeRep, updateRepManager } from '../controllers/rep.controller';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 
 router.use(authenticate);
 
+router.post('/', requireRole('ADMIN', 'MANAGER', 'SUPER_ADMIN'), createRep);
 router.get('/', getReps);
 router.get('/:id', getRep);
 router.post('/:id/score', requireRole('ADMIN', 'MANAGER', 'SUPER_ADMIN'), scoreRep);
