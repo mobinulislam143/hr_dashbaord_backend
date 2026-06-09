@@ -1,0 +1,296 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  SCALE
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  VIEWER
+}
+
+enum RecruitingSource {
+  INDEED
+  REFERRAL
+  WEBSITE
+  FACEBOOK
+  INSTAGRAM
+  OTHER
+}
+
+enum Business {
+  VEXON
+  EASYSCALE
+  TELENZA
+  SOLV_GLOBAL
+  CTC_COURTS
+}
+
+enum RepRole {
+  SETTER
+  HYBRID_REP
+  FULL_CYCLE_CLOSER
+  SALES_MANAGER
+}
+
+enum ApplicantStatus {
+  APPLIED
+  CONTACTED
+  INTERVIEW_SCHEDULED
+  INTERVIEW_COMPLETED
+  HIRED
+  TRAINING_1_SCHEDULED
+  TRAINING_1_COMPLETE
+  TRAINING_2_SCHEDULED
+  TRAINING_2_COMPLETE
+  TRAINING_3_SCHEDULED
+  TRAINING_3_COMPLETE
+  ACTIVE_REP
+  INACTIVE
+  FIRED
+}
+
+enum TrainingResult {
+  PASS
+  FAIL
+}
+
+enum RepTier {
+  A_PLAYER
+  B_PLAYER
+  C_PLAYER
+}
+
+enum RemovalReason {
+  INACTIVE
+  NO_ACTIVITY
+  POOR_PERFORMANCE
+  COMMUNICATION_ISSUES
+  VOLUNTARY_DEPARTURE
+  OTHER
+}
+
+// ─── ORGANIZATION ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String   @unique
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users      User[]
+  applicants Applicant[]
+  smtpConfig SmtpConfig?
+
+  @@map("organizations")
+}
+
+// ─── USER ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  email          String   @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole @default(VIEWER)
+  organizationId String   @db.ObjectId
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assignedReps ActiveRep[]  @relation("ManagerReps")
+  repScores    RepScore[]   @relation("ScoredBy")
+
+  @@map("users")
+}
+
+// ─── APPLICANT ────────────────────────────────────────────────────────────────
+
+model Applicant {
+  id               String          @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId   String          @db.ObjectId
+  fullName         String
+  phone            String
+  email            String
+  city             String
+  state            String
+  dateApplied      DateTime        @default(now())
+  recruitingSource RecruitingSource
+  business         Business
+  role             RepRole
+  status           ApplicantStatus @default(APPLIED)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  interview    Interview?
+  trainings    Training[]
+  activeRep    ActiveRep?
+  removalLog   RemovalLog?
+
+  @@map("applicants")
+}
+
+// ─── INTERVIEW ────────────────────────────────────────────────────────────────
+
+model Interview {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  applicantId      String    @unique @db.ObjectId
+  interviewDate    DateTime?
+  notes            String?
+  score            Int?
+  reminderSentAt   DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id])
+
+  @@map("interviews")
+}
+
+// ─── TRAINING ─────────────────────────────────────────────────────────────────
+
+model Training {
+  id             String          @id @default(auto()) @map("_id") @db.ObjectId
+  applicantId    String          @db.ObjectId
+  trainingNumber Int
+  scheduledDate  DateTime?
+  completedDate  DateTime?
+  result         TrainingResult?
+  reminderSentAt DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id])
+
+  @@unique([applicantId, trainingNumber])
+  @@map("trainings")
+}
+
+// ─── ACTIVE REP ───────────────────────────────────────────────────────────────
+
+model ActiveRep {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  applicantId String   @unique @db.ObjectId
+  hireDate    DateTime @default(now())
+  managerId   String?  @db.ObjectId
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applicant   Applicant          @relation(fields: [applicantId], references: [id])
+  manager     User?              @relation("ManagerReps", fields: [managerId], references: [id])
+  scores      RepScore[]
+  performance PerformanceEntry[]
+  removalLog  RemovalLog?
+
+  @@map("active_reps")
+}
+
+// ─── REP SCORE ────────────────────────────────────────────────────────────────
+
+model RepScore {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  repId         String   @db.ObjectId
+  workEthic     Int
+  coachability  Int
+  communication Int
+  consistency   Int
+  overallRating Int
+  tier          RepTier
+  scoredAt      DateTime @default(now())
+  scoredById    String?  @db.ObjectId
+
+  rep      ActiveRep @relation(fields: [repId], references: [id])
+  scoredBy User?     @relation("ScoredBy", fields: [scoredById], references: [id])
+
+  @@map("rep_scores")
+}
+
+// ─── PERFORMANCE ──────────────────────────────────────────────────────────────
+
+model PerformanceEntry {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  repId            String   @db.ObjectId
+  weekOf           DateTime
+  callsThisWeek    Int      @default(0)
+  meetingsBooked   Int      @default(0)
+  revenueThisMonth Float    @default(0)
+  createdAt        DateTime @default(now())
+
+  rep ActiveRep @relation(fields: [repId], references: [id])
+
+  @@map("performance_entries")
+}
+
+// ─── REMOVAL LOG ──────────────────────────────────────────────────────────────
+
+model RemovalLog {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  applicantId String        @unique @db.ObjectId
+  repId       String?       @unique @db.ObjectId
+  dateRemoved DateTime      @default(now())
+  reason      RemovalReason
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  applicant Applicant  @relation(fields: [applicantId], references: [id])
+  rep       ActiveRep? @relation(fields: [repId], references: [id])
+
+  @@map("removal_logs")
+}
+
+// ─── EMAIL CONFIG ─────────────────────────────────────────────────────────────
+
+model SmtpConfig {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId      String   @unique @db.ObjectId
+
+  // Provider: "resend" | "brevo" | "smtp"
+  provider            String   @default("resend")
+
+  // API-key based providers (Resend, Brevo)
+  apiKey              String?
+
+  // SMTP fallback (advanced users only)
+  smtpHost            String?
+  smtpPort            Int?
+  smtpSecure          Boolean  @default(false)
+  smtpUser            String?
+  smtpPass            String?
+
+  // Common sender info
+  fromName            String   @default("")
+  fromEmail           String   @default("")
+
+  // Feature flags
+  isEnabled           Boolean  @default(true)
+  interviewReminder   Boolean  @default(true)
+  trainingReminder    Boolean  @default(true)
+  reminderHoursBefore Int      @default(24)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("smtp_configs")
+}
